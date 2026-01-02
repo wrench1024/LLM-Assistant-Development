@@ -63,6 +63,7 @@ data/
 .nb-gradle/
 
 # ### Environment & Security ###
+.antigravityrules
 .env
 .env.local
 .env.development.local
