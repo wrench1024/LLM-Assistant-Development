@@ -1,0 +1,65 @@
+spring:
+  # 数据源配置（MySQL 端口 3307）
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3307/uni_research_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: root
+    password: root
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+    
+  # Redis 配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: root
+      database: 0
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-wait: -1ms
+          max-idle: 8
+          min-idle: 0
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.uni.research.module.*.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# JWT 配置
+jwt:
+  secret: uni-research-assistant-secret-key-2024-change-in-production-environment
+  expiration: 86400000  # 24小时（毫秒）
+  header: Authorization
+  prefix: Bearer 
+
+# Python AI 服务配置
+ai-service:
+  base-url: http://localhost:8000
+  connect-timeout: 5000  # 连接超时 5秒
+  read-timeout: 30000    # 读取超时 30秒
+  write-timeout: 30000   # 写入超时 30秒
+
+# 日志配置
+logging:
+  level:
+    root: info
+    com.uni.research: debug
+    com.baomidou.mybatisplus: debug
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n'
