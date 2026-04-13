@@ -83,7 +83,7 @@ public class SecurityConfig {
                                                                                                               // Session
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**", "/doc.html", "/webjars/**", "/v3/api-docs/**",
-                                "/swagger-ui/**", "/swagger-resources/**", "/demo/**", "/common/**")
+                                "/swagger-ui/**", "/swagger-resources/**", "/demo/**", "/common/**", "/sensitive/**")
                         .permitAll() // 开放接口
                         .anyRequest().authenticated() // 其他接口需要认证
                 )

@@ -30,6 +30,11 @@
           <el-icon><EditPen /></el-icon>
           <span>写作助手</span>
         </el-menu-item>
+
+        <el-menu-item index="/sensitive">
+          <el-icon><Warning /></el-icon>
+          <span>敏感词管理</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -79,7 +84,8 @@ import {
   ArrowDown, 
   SwitchButton,
   DataLine,
-  EditPen
+  EditPen,
+  Warning
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -94,7 +100,8 @@ const pageTitle = computed(() => {
     '/chat': 'AI 智能对话',
     '/documents': '文档管理',
     '/analyze': '智能研读分析',
-    '/write': '学术写作助手'
+    '/write': '学术写作助手',
+    '/sensitive': '敏感词管理'
   }
   return titles[route.path] || 'LLM Research Assistant'
 })

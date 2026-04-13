@@ -39,6 +39,12 @@ const routes: RouteRecordRaw[] = [
                 name: 'Write',
                 component: () => import('@/views/Write/WritingView.vue'),
                 meta: { requiresAuth: true }
+            },
+            {
+                path: 'sensitive',
+                name: 'SensitiveWord',
+                component: () => import('@/views/SensitiveWord/index.vue'),
+                meta: { requiresAuth: true }
             }
         ]
     },

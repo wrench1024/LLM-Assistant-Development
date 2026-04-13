@@ -1,0 +1,162 @@
+### 提示词模板管理 API 测试
+
+# 注意：请先登录获取 token，并替换下面的 {{token}}
+
+### 1. 获取文体类型列表
+GET http://localhost:8080/api/writing/templates/genres
+Authorization: Bearer {{token}}
+
+### 2. 获取动作类型列表
+GET http://localhost:8080/api/writing/templates/actions
+Authorization: Bearer {{token}}
+
+### 3. 查询所有模板
+GET http://localhost:8080/api/writing/templates
+Authorization: Bearer {{token}}
+
+### 4. 查询学术论文的润色模板
+GET http://localhost:8080/api/writing/templates?genre=academic_paper&action=polish
+Authorization: Bearer {{token}}
+
+### 5. 查询文献综述的所有模板
+GET http://localhost:8080/api/writing/templates?genre=literature_review
+Authorization: Bearer {{token}}
+
+### 6. 获取模板详情
+GET http://localhost:8080/api/writing/templates/1
+Authorization: Bearer {{token}}
+
+### 7. 创建自定义模板
+POST http://localhost:8080/api/writing/templates
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "我的学术论文润色模板",
+  "genre": "academic_paper",
+  "action": "polish",
+  "promptContent": "你是一位资深的学术论文编辑，专注于计算机科学领域。请对以下学术论文文本进行润色优化：\n\n要求：\n1. 保持学术严谨性和专业性\n2. 使用规范的学术表达和术语\n3. 确保逻辑清晰、论证严密\n4. 优化句式结构，提升可读性\n5. 特别注意计算机科学领域的专业术语\n\n原文：\n{text}\n\n{context}\n\n请直接输出润色后的文本：",
+  "description": "专门用于计算机科学领域学术论文的润色",
+  "sortOrder": 10,
+  "enabled": true
+}
+
+### 8. 更新自定义模板
+PUT http://localhost:8080/api/writing/templates
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "id": 100,
+  "name": "更新后的模板名称",
+  "promptContent": "更新后的提示词内容...\n原文：\n{text}\n\n{context}",
+  "description": "更新后的描述",
+  "sortOrder": 20,
+  "enabled": true
+}
+
+### 9. 删除自定义模板
+DELETE http://localhost:8080/api/writing/templates/100
+Authorization: Bearer {{token}}
+
+### 10. 初始化系统内置模板（管理员）
+POST http://localhost:8080/api/writing/templates/init
+Authorization: Bearer {{token}}
+
+### 11. 使用默认模板进行学术论文润色
+POST http://localhost:8080/api/writing/process-with-template
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "text": "本研究提出了一种基于深度学习的图像分类方法。该方法使用卷积神经网络对图像进行特征提取，然后通过全连接层进行分类。实验结果表明，该方法在多个数据集上都取得了较好的效果。",
+  "genre": "academic_paper",
+  "action": "polish",
+  "context": "这是计算机视觉领域的论文，目标期刊是 IEEE Transactions on Pattern Analysis and Machine Intelligence"
+}
+
+### 12. 使用默认模板进行学术论文扩写
+POST http://localhost:8080/api/writing/process-with-template
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "text": "深度学习在图像识别领域取得了显著进展。",
+  "genre": "academic_paper",
+  "action": "expand",
+  "context": "需要扩写成一段完整的引言，包含背景、现状和研究意义"
+}
+
+### 13. 使用默认模板进行文献综述润色
+POST http://localhost:8080/api/writing/process-with-template
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "text": "近年来，许多研究者对深度学习进行了研究。Zhang等人提出了一种新方法。Li等人也做了相关工作。这些研究都取得了一定成果。",
+  "genre": "literature_review",
+  "action": "polish",
+  "context": "这是关于深度学习在医学图像分析中应用的文献综述"
+}
+
+### 14. 使用默认模板进行研究报告摘要
+POST http://localhost:8080/api/writing/process-with-template
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "text": "本研究针对某市智慧城市建设现状开展了深入调研。通过问卷调查、实地考察和专家访谈等方式，收集了大量一手数据。研究发现，该市在智慧交通、智慧医疗等方面取得了显著进展，但在数据共享、系统集成等方面仍存在不足。基于研究发现，我们提出了五项改进建议，包括建立统一的数据平台、加强部门协同、提升市民参与度等。这些建议对于推进该市智慧城市建设具有重要参考价值。",
+  "genre": "research_report",
+  "action": "summarize"
+}
+
+### 15. 使用自定义模板进行处理
+POST http://localhost:8080/api/writing/process-with-template
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "text": "本文提出了一种新的算法。",
+  "genre": "academic_paper",
+  "action": "polish",
+  "context": "计算机科学领域",
+  "templateId": 100
+}
+
+### 16. 使用旧版 API（保持兼容）
+POST http://localhost:8080/api/writing/process
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "text": "待处理的文本内容",
+  "instruction": "polish",
+  "context": "可选的上下文信息"
+}
+
+### 测试场景说明
+
+# 场景1: 学术论文写作流程
+# 1. 获取文体和动作列表 -> API 1, 2
+# 2. 查询学术论文相关模板 -> API 4
+# 3. 使用默认模板润色论文 -> API 11
+# 4. 使用默认模板扩写内容 -> API 12
+# 5. 创建自定义模板 -> API 7
+# 6. 使用自定义模板处理 -> API 15
+
+# 场景2: 文献综述撰写流程
+# 1. 查询文献综述模板 -> API 5
+# 2. 使用默认模板润色综述 -> API 13
+# 3. 根据需要创建自定义模板 -> API 7
+
+# 场景3: 研究报告撰写流程
+# 1. 查询研究报告模板
+# 2. 使用默认模板生成摘要 -> API 14
+# 3. 使用默认模板润色报告内容
+
+# 场景4: 模板管理流程
+# 1. 查询所有模板 -> API 3
+# 2. 创建自定义模板 -> API 7
+# 3. 更新模板 -> API 8
+# 4. 删除模板 -> API 9
+# 5. 查看模板详情 -> API 6

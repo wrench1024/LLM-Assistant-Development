@@ -3,6 +3,11 @@ import { ref, computed } from 'vue'
 import { marked } from 'marked'
 import { Document, Packer, Paragraph, TextRun, TableOfContents } from 'docx'
 import { saveAs } from 'file-saver'
+import { checkText, type CheckTextResponse } from '@/api/sensitive'
+import { templateAPI, type PromptTemplate } from '@/api/write'
+import { ElMessage } from 'element-plus'
+import SensitiveTextHighlight from '@/components/SensitiveTextHighlight.vue'
+import TemplateManager from '@/components/TemplateManager.vue'
 
 const content = ref('')
 const instruction = ref('polish')
@@ -10,11 +15,45 @@ const customContext = ref('')
 const isProcessing = ref(false)
 const resultContent = ref('')
 
+// 模板管理相关
+const showTemplateManager = ref(false)
+const selectedTemplate = ref<PromptTemplate | null>(null)
+const selectedGenre = ref('academic_paper')
+const selectedAction = ref('polish')
+
+// 敏感词检测相关
+const sensitiveCheckResult = ref<CheckTextResponse | null>(null)
+const isCheckingSensitive = ref(false)
+
 const wordCount = computed(() => {
   // Count non-whitespace characters
   return content.value.replace(/\s+/g, '').length
 })
 // ... (keep existing refs)
+
+// 检测敏感词
+const checkSensitiveWords = async () => {
+  if (!content.value.trim()) {
+    ElMessage.warning('请先输入内容')
+    return
+  }
+  
+  isCheckingSensitive.value = true
+  try {
+    const res = await checkText({ text: content.value })
+    sensitiveCheckResult.value = res.data
+    
+    if (res.data.hasSensitive) {
+      ElMessage.warning(`检测到 ${res.data.matches.length} 个敏感词`)
+    } else {
+      ElMessage.success('未检测到敏感词')
+    }
+  } catch (error) {
+    ElMessage.error('敏感词检测失败')
+  } finally {
+    isCheckingSensitive.value = false
+  }
+}
 
 // Export to Word function
 // Export to Word function
@@ -142,13 +181,7 @@ const tools = [
   { label: '语法纠错', value: 'fix_grammar', icon: '✅' }
 ]
 
-const abortController = ref<AbortController | null>(null)
-
 const cancelProcessing = () => {
-  if (abortController.value) {
-    abortController.value.abort()
-    abortController.value = null
-  }
   isProcessing.value = false
   resultContent.value = ''
 }
@@ -156,84 +189,42 @@ const cancelProcessing = () => {
 const processText = async () => {
   if (!content.value.trim()) return
   
-  // Cancel previous request if any
-  if (abortController.value) {
-    abortController.value.abort()
-  }
-  abortController.value = new AbortController()
-  
   isProcessing.value = true
   resultContent.value = ''
   
-  const token = localStorage.getItem('token') || ''
-  
   try {
-    const response = await fetch('http://localhost:8000/api/v1/write/process', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
+    // 使用新版 API（支持文体和模板）
+    await templateAPI.processWithTemplate(
+      {
         text: content.value,
-        instruction: instruction.value,
-        context: customContext.value
-      }),
-      signal: abortController.value.signal
-    })
-
-    if (!response.ok) throw new Error('API Error')
-
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
-
-    if (!reader) return
-
-    let buffer = '' // Buffer for incomplete lines
-    
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      
-      // Keep the last incomplete line in the buffer
-      buffer = lines.pop() || ''
-      
-      for (const line of lines) {
-        if (line.startsWith('data:')) {
-          const data = line.slice(5).trim()
-          if (data === '[DONE]') {
-            isProcessing.value = false
-            return
-          }
-          // Handle escaped newlines
-          const text = data.replace(/\\n/g, '\n')
-          resultContent.value += text
-        }
-      }
-    }
-    
-    // Process remaining buffer
-    if (buffer.startsWith('data:')) {
-      const data = buffer.slice(5).trim()
-      if (data !== '[DONE]') {
-        const text = data.replace(/\\n/g, '\n')
+        genre: selectedGenre.value,
+        action: selectedAction.value,
+        context: customContext.value,
+        templateId: selectedTemplate.value?.id
+      },
+      (text) => {
         resultContent.value += text
+      },
+      () => {
+        isProcessing.value = false
+      },
+      (error) => {
+        resultContent.value = `Error: ${error.message}`
+        isProcessing.value = false
       }
-    }
-    isProcessing.value = false
+    )
   } catch (e: any) {
-    if (e.name === 'AbortError') {
-      console.log('Request aborted')
-    } else {
-      resultContent.value = `Error: ${e}`
-    }
+    resultContent.value = `Error: ${e}`
     isProcessing.value = false
-  } finally {
-    abortController.value = null
   }
+}
+
+// 选择模板
+const handleTemplateSelect = (template: PromptTemplate) => {
+  selectedTemplate.value = template
+  selectedGenre.value = template.genre
+  selectedAction.value = template.action
+  ElMessage.success(`已选择模板：${template.name}`)
 }
 
 
@@ -242,63 +233,29 @@ const processSelection = async (tool: string) => {
   if (!selectedText.value.trim()) return
   
   showSelectionToolbar.value = false
-  
-  // Cancel previous request if any
-  if (abortController.value) {
-    abortController.value.abort()
-  }
-  abortController.value = new AbortController()
-  
   isProcessing.value = true
   resultContent.value = ''
   
-  const token = localStorage.getItem('token') || ''
-  
   try {
-    const response = await fetch('http://localhost:8000/api/v1/write/process', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
+    await templateAPI.processWithTemplate(
+      {
         text: selectedText.value,
-        instruction: tool,
-        context: customContext.value
-      }),
-      signal: abortController.value.signal
-    })
-
-    if (!response.ok) throw new Error('API Error')
-
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
-
-    if (!reader) return
-
-    let buffer = ''
-    
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      
-      for (const line of lines) {
-        if (line.startsWith('data:')) {
-          const data = line.slice(5).trim()
-          if (data === '[DONE]') {
-            isProcessing.value = false
-            return
-          }
-          const text = data.replace(/\\n/g, '\n')
-          resultContent.value += text
-        }
+        genre: selectedGenre.value,
+        action: tool,
+        context: customContext.value,
+        templateId: selectedTemplate.value?.id
+      },
+      (text) => {
+        resultContent.value += text
+      },
+      () => {
+        isProcessing.value = false
+      },
+      (error) => {
+        resultContent.value = `Error: ${error.message}`
+        isProcessing.value = false
       }
-    }
-    isProcessing.value = false
+    )
   } catch (e: any) {
     if (e.name === 'AbortError') {
       console.log('Request aborted')
@@ -306,8 +263,6 @@ const processSelection = async (tool: string) => {
       resultContent.value = `Error: ${e}`
     }
     isProcessing.value = false
-  } finally {
-    abortController.value = null
   }
 }
 
@@ -415,13 +370,48 @@ const renderedResult = computed(() => {
   <div class="writing-container">
     <div class="editor-area">
       <div class="toolbar">
+        <button class="tool-btn" @click="showTemplateManager = true">📚 模板管理</button>
         <button class="tool-btn" @click="showTemplateSelector = true">📂 使用模版</button>
         <button class="tool-btn" @click="exportToWord">💾 导出 Word</button>
+        <button class="tool-btn" @click="checkSensitiveWords" :disabled="isCheckingSensitive">
+          {{ isCheckingSensitive ? '检测中...' : '🔍 敏感词检测' }}
+        </button>
         <div class="spacer"></div>
+        <span v-if="selectedTemplate" class="selected-template">
+          当前模板：{{ selectedTemplate.name }}
+        </span>
         <span class="word-count">字数: {{ wordCount }}</span>
       </div>
       
+      <!-- 敏感词检测结果提示 -->
+      <div v-if="sensitiveCheckResult?.hasSensitive" class="sensitive-alert">
+        <div class="alert-header">
+          <span>⚠️ 检测到 {{ sensitiveCheckResult.matches.length }} 个敏感词</span>
+          <button @click="sensitiveCheckResult = null" class="close-alert">✕</button>
+        </div>
+        <div class="sensitive-words-list">
+          <span 
+            v-for="(match, index) in sensitiveCheckResult.matches" 
+            :key="index"
+            class="sensitive-tag"
+          >
+            {{ match.word }}
+          </span>
+        </div>
+      </div>
+      
+      <div v-if="sensitiveCheckResult?.hasSensitive" class="editor-with-highlight">
+        <div class="highlight-label">内容预览（敏感词已标红）：</div>
+        <div class="highlight-content">
+          <SensitiveTextHighlight
+            :text="content"
+            :matches="sensitiveCheckResult.matches"
+          />
+        </div>
+      </div>
+      
       <textarea 
+        v-else
         ref="editorRef"
         v-model="content" 
         placeholder="在此输入您的学术文本... 或点击上方'使用模版'开始。\n\n💡 提示：选中任意文字后，会出现快捷工具条。"
@@ -503,6 +493,13 @@ const renderedResult = computed(() => {
         <button class="close-btn" @click="showTemplateSelector = false">取消</button>
       </div>
     </div>
+    
+    <!-- 模板管理对话框 -->
+    <TemplateManager 
+      v-if="showTemplateManager"
+      @close="showTemplateManager = false"
+      @select="handleTemplateSelect"
+    />
   </div>
 </template>
 
@@ -549,6 +546,15 @@ const renderedResult = computed(() => {
   padding: 4px 12px;
   background: rgba(144, 147, 153, 0.1);
   border-radius: 20px;
+}
+
+.selected-template {
+  color: #667eea;
+  font-size: 13px;
+  padding: 4px 12px;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 20px;
+  font-weight: 500;
 }
 
 .writing-container {
@@ -972,5 +978,100 @@ const renderedResult = computed(() => {
 .selection-toolbar button:hover {
   background: rgba(255, 255, 255, 0.35);
   transform: translateY(-1px);
+}
+
+/* 敏感词检测相关样式 */
+.sensitive-alert {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+  border: 1px solid #ffccc7;
+  border-radius: 12px;
+  animation: alertSlideIn 0.3s ease-out;
+}
+
+@keyframes alertSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.alert-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: #cf1322;
+}
+
+.close-alert {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #cf1322;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.close-alert:hover {
+  background: rgba(207, 19, 34, 0.1);
+}
+
+.sensitive-words-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sensitive-tag {
+  padding: 4px 12px;
+  background: #fff;
+  border: 1px solid #ff4d4f;
+  border-radius: 16px;
+  color: #ff4d4f;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.editor-with-highlight {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.highlight-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #606266;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #f0f2f5;
+}
+
+.highlight-content {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 16px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 </style>
